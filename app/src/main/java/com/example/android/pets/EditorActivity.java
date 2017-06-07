@@ -16,9 +16,14 @@
 package com.example.android.pets;
 
 import android.content.ContentValues;
+import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.app.LoaderManager;
 import android.support.v4.app.NavUtils;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.view.Menu;
@@ -31,12 +36,11 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.example.android.pets.data.PetContract.PetEntry;
-import com.example.android.pets.data.PetDbHelper;
 
 /**
  * Allows user to create a new pet or edit an existing one.
  */
-public class EditorActivity extends AppCompatActivity {
+public class EditorActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor>{
 
     /** EditText field to enter the pet's name */
     private EditText mNameEditText;
@@ -50,11 +54,17 @@ public class EditorActivity extends AppCompatActivity {
     /** EditText field to enter the pet's gender */
     private Spinner mGenderSpinner;
 
+
     /**
      * Gender of the pet. The possible values are:
      * 0 for unknown gender, 1 for male, 2 for female.
      */
     private int mGender = PetEntry.GENDER_UNKNOWN;
+
+    PetCursorAdapter mAdapter;
+    private Uri mCurrentPetUri;
+    private static final int PET_LOADER = 0;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +79,16 @@ public class EditorActivity extends AppCompatActivity {
         mGenderSpinner = (Spinner) findViewById(R.id.spinner_gender);
 
         setupSpinner();
+        Intent intent = getIntent();
+        mCurrentPetUri = intent.getData();
+        if (mCurrentPetUri != null) {
+            setTitle("Edit pet");
+            mAdapter = new PetCursorAdapter(this, null);
+            getSupportLoaderManager().initLoader(PET_LOADER, null, this);
+        } else {
+          setTitle("Add pet");
+        }
+
     }
 
     /**
@@ -169,5 +189,57 @@ public class EditorActivity extends AppCompatActivity {
                 return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+        String[] projection = {
+                PetEntry._ID,
+                PetEntry.COLUMN_PET_NAME,
+                PetEntry.COLUMN_PET_BREED,
+                PetEntry.COLUMN_PET_WEIGHT,
+                PetEntry.COLUMN_PET_GENDER,
+        };
+        return new CursorLoader(this, mCurrentPetUri, projection, null, null, null);
+
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+        if (data == null || data.getCount() < 1) {
+            return;
+        }
+        if (data.moveToFirst()) {
+            int nameColumnIndex = data.getColumnIndexOrThrow(PetEntry.COLUMN_PET_NAME);
+            int breedColumnIndex = data.getColumnIndexOrThrow(PetEntry.COLUMN_PET_BREED);
+            int weightColumnIndex = data.getColumnIndexOrThrow(PetEntry.COLUMN_PET_WEIGHT);
+            int genderColumnIndex = data.getColumnIndexOrThrow(PetEntry.COLUMN_PET_GENDER);
+
+
+            mNameEditText.setText(data.getString(nameColumnIndex));
+
+            mBreedEditText.setText(data.getString(breedColumnIndex));
+            mWeightEditText.setText(Integer.toString(data.getInt(weightColumnIndex)));
+            switch (data.getInt(genderColumnIndex)) {
+                case PetEntry.GENDER_MALE:
+                    mGenderSpinner.setSelection(1);
+                    break;
+                case PetEntry.GENDER_FEMALE:
+                    mGenderSpinner.setSelection(2);
+                    break;
+                default:
+                    mGenderSpinner.setSelection(0);
+                    break;
+            }
+        }
+
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        mNameEditText.setText("");
+        mBreedEditText.setText("");
+        mWeightEditText.setText("");
+        mGenderSpinner.setSelection(0); // Select "Unknown" gender
     }
 }
